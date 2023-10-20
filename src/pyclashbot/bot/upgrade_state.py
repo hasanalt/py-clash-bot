@@ -70,8 +70,18 @@ CLOSE_CARD_PAGE_COORD = (355, 238)
 def upgrade_cards_state(vm_index, logger: Logger, next_state):
     logger.change_status(status="Upgrade cards state")
     logger.add_card_upgrade_attempt()
+
     # if not on clash main, return restart
-    if  check_if_on_clash_main_menu(vm_index) is not True:
+    clash_main_check = check_if_on_clash_main_menu(vm_index)
+    if clash_main_check is not True:
+        logger.change_status("Not on clash main at the start of upgrade_cards_state()")
+        logger.log(f'There are the pixels the bot saw after failing to find clash main:')
+        for pixel in clash_main_check:
+            logger.log(f'   {pixel}')
+
+        return "restart"
+
+    if check_if_on_clash_main_menu(vm_index) is not True:
         logger.change_status(
             status="Error 31570138 Not on clash main to being upgrade cards state"
         )
@@ -108,6 +118,15 @@ def upgrade_cards_state(vm_index, logger: Logger, next_state):
 
 
 def check_for_second_upgrade_button_condition_1(vm_index) -> bool:
+    """
+    Check if the second upgrade button condition 1 is met.
+
+    Args:
+        vm_index (int): The index of the virtual machine.
+
+    Returns:
+        bool: True if the condition is met, False otherwise.
+    """
     if not check_line_for_color(vm_index, 201, 473, 203, 503, (56, 228, 72)):
         return False
     if not check_line_for_color(vm_index, 275, 477, 276, 501, (56, 228, 72)):
@@ -119,6 +138,15 @@ def check_for_second_upgrade_button_condition_1(vm_index) -> bool:
 
 
 def check_for_confirm_upgrade_button_condition_1(vm_index) -> bool:
+    """
+    Check if the confirm upgrade button condition 1 is met.
+
+    Args:
+        vm_index (int): The index of the virtual machine.
+
+    Returns:
+        bool: True if the condition is met, False otherwise.
+    """
     if not check_line_for_color(vm_index, 201, 401, 201, 432, (56, 228, 72)):
         return False
     if not check_line_for_color(vm_index, 277, 399, 277, 431, (56, 228, 72)):
@@ -130,6 +158,18 @@ def check_for_confirm_upgrade_button_condition_1(vm_index) -> bool:
 
 
 def upgrade_card(vm_index, logger: Logger, index, upgrade_list) -> None:
+    """
+    Upgrades a card if it is upgradable.
+
+    Args:
+        vm_index (int): The index of the virtual machine to perform the upgrade on.
+        logger (Logger): The logger object to use for logging.
+        index (int): The index of the card to upgrade.
+        upgrade_list (list[bool]): A list of boolean values indicating whether each card is upgradable.
+
+    Returns:
+        None
+    """
     logger.change_status(status=f"Handling card index: {index}")
 
     # if this card index is upgradable
@@ -208,6 +248,16 @@ def upgrade_card(vm_index, logger: Logger, index, upgrade_list) -> None:
 
 
 def get_upgradable_card_bool_list(vm_index, logger: Logger):
+    """
+    Returns a list of boolean values indicating whether each card is upgradable.
+
+    Args:
+        vm_index (int): The index of the virtual machine to use.
+        logger (Logger): The logger object to use for logging.
+
+    Returns:
+        list[bool]: A list of boolean values indicating whether each card is upgradable.
+    """
     bool_list = []
 
     logger.change_status(status="Checking out which cards are upgradable")
@@ -229,6 +279,9 @@ def get_upgradable_card_bool_list(vm_index, logger: Logger):
             bool_list.append(True)
         else:
             bool_list.append(False)
+
+    # click deadspace at the end
+    click(vm_index, 10, 200)
 
     return bool_list
 
@@ -252,5 +305,8 @@ def check_for_missing_gold_popup(vm_index):
     return True
 
 
-if __name__ == "__main__":
-    pass
+if __name__ == '__main__':
+    vm_index=1
+    logger=Logger(None,None)
+    next_state = 'test'
+    upgrade_cards_state(vm_index, logger, next_state)

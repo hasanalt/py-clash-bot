@@ -1,18 +1,22 @@
 """import logging for file logging"""
 import logging
+import pprint
 import threading
 import time
 import zipfile
 from functools import wraps
 from os import listdir, makedirs, remove
-from os.path import exists, expandvars, getmtime, join
+from os.path import basename, exists, expandvars, getmtime, join
 
+from pyclashbot.utils.machine_info import MACHINE_INFO
+from pyclashbot.utils.pastebin import upload_pastebin
 from pyclashbot.utils.versioning import __version__
 
 MODULE_NAME = "py-clash-bot"
 LOGS_TO_KEEP = 10
 
 log_dir = join(expandvars("%appdata%"), MODULE_NAME, "logs")
+log_name = join(log_dir, time.strftime("%Y-%m-%d_%H-%M", time.localtime()) + ".txt")
 archive_name: str = join(log_dir, "logs.zip")
 
 
@@ -38,7 +42,6 @@ def initalize_pylogging() -> None:
 
     if not exists(log_dir):
         makedirs(log_dir)
-    log_name = join(log_dir, time.strftime("%Y-%m-%d_%H-%M", time.localtime()) + ".txt")
     logging.basicConfig(
         filename=log_name,
         encoding="utf-8",
@@ -53,6 +56,9 @@ def initalize_pylogging() -> None:
  )___/ \\  /(___)( (__  )(__  /(__)\\ \\__ \\ ) _ ((___)) _ < )(_)(   )(
 (__)   (__)      \\___)(____)(__)(__)(___/(_) (_)   (____/(_____) (__)
 """
+    )
+    logging.info(
+        "Machine Info: \n%s", pprint.pformat(MACHINE_INFO, sort_dicts=False, indent=4)
     )
     compress_logs()
 
@@ -102,6 +108,7 @@ class Logger:
         self.free_offer_collection_attempts = 0
         self.chest_unlock_attempts = 0
         self.card_mastery_reward_collection_attempts = 0
+        self.war_attempts = 0
 
         # restart stats
         self.auto_restarts = 0
@@ -257,6 +264,7 @@ class Logger:
         """add card played to log"""
         self.cards_played += 1
 
+    @_updates_log
     def remove_card_played(self, cards_to_remove=1):
         """decremenet logger's card played counter by cards_to_remove"""
         self.cards_played -= cards_to_remove
@@ -346,6 +354,10 @@ class Logger:
     def add_card_mastery_reward_collection_attempt(self):
         """increments logger's card_mastery_reward_collection_attempts by 1"""
         self.card_mastery_reward_collection_attempts += 1
+
+    def add_war_attempt(self):
+        """increments logger's war_attempts by 1"""
+        self.war_attempts += 1
 
     def get_1v1_fights(self) -> int:
         """returns logger's 1v1_fights stat"""
@@ -452,6 +464,43 @@ class Logger:
 
         self.log(
             f"Cant do card mastery. {games_played} Games and {card_mastery_attempts} Attempts"
+        )
+        return False
+
+    def check_if_can_do_war(self, increment) -> bool:
+        if increment == 1:
+            self.log(f"Increment is {increment} so can always collect card mastery")
+            return True
+
+        # count war_attempts
+        war_attempts = self.war_attempts
+
+        # count games
+        games_played = self._1v1_fights + self._2v2_fights + self.war_fights
+
+        # if war_attempts is zero return true
+        if war_attempts == 0:
+            self.log(
+                f"Can do war. {games_played} Games and {war_attempts} Attempts"
+            )
+            return True
+
+        # if games_played is zero return true
+        if games_played == 0:
+            self.log(
+                f"Can do war. {games_played} Games and {war_attempts} Attempts"
+            )
+            return True
+
+        # if games_played / int(increment) > war_attempts
+        if games_played / int(increment) >= war_attempts:
+            self.log(
+                f"Can do war. {games_played} Games & {war_attempts} Attempts"
+            )
+            return True
+
+        self.log(
+            f"Cant do war. {games_played} Games and {war_attempts} Attempts"
         )
         return False
 
@@ -646,7 +695,7 @@ class Logger:
 
         self.log("User Toggle Keys and Values:")
         for key, value in user_toggle_keys_and_values:
-            while len(key) < 35:
+            while len(key) < 45:
                 key += " "
             self.log(f"     -{key}:           {value}")
 
@@ -660,3 +709,15 @@ class Logger:
         self.log("-------------------------------")
         self.log("-------------------------------")
         self.log("-------------------------------\n\n")
+
+    def upload_log(self) -> str | None:
+        """method to upload log to pastebin"""
+        with open(log_name, "r", encoding="utf-8") as log_file:
+            return upload_pastebin(
+                f"py-clash-bot log ({basename(log_name)})", log_file.read()
+            )
+
+
+if __name__ == "__main__":
+    initalize_pylogging()
+    logger = Logger()

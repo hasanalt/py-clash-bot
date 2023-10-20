@@ -45,10 +45,17 @@ def randomize_deck_state(vm_index: int, logger: Logger, next_state: str):
     logger.change_status("Randomizing deck number 2")
     logger.add_randomize_deck_attempt()
 
-    # if not on clash main, return fail
-    if check_if_on_clash_main_menu(vm_index) is not True:
-        logger.log("Error 775 Not on clash main for deck randomization state ")
+    clash_main_check = check_if_on_clash_main_menu(vm_index)
+    if clash_main_check is not True:
+        logger.change_status(
+            "Error 38593 Not on clash main for the randomize deck state."
+        )
+        logger.log(f'There are the pixels the bot saw after failing to find clash main:')
+        for pixel in clash_main_check:
+            logger.log(f'   {pixel}')
+
         return "restart"
+
 
     # get to card page tab
     if get_to_card_page_from_clash_main(vm_index, logger) == "restart":
@@ -532,10 +539,4 @@ def check_for_skeleton_king(vm_index) -> bool:
 
 
 if __name__ == "__main__":
-    vm_index = 8
-    logger = Logger(None, None)
-
-    randomize_this_deck_2(vm_index, logger)
-
-    while 1:
-        iar = screenshot(vm_index)
+    pass

@@ -1,11 +1,15 @@
+"""
+This module contains the main entry point for the py-clash-bot program.
+It provides a GUI interface for users to configure and run the bot.
+"""
+import random
 import sys
 import webbrowser
 import PySimpleGUI as sg
-from pyclashbot.bot.states import state_tree
 from pyclashbot.bot.worker import WorkerThread
 from pyclashbot.interface import disable_keys, user_config_keys
 from pyclashbot.interface.joblist import no_jobs_popup
-from pyclashbot.interface.layout import create_window
+from pyclashbot.interface.layout import DONATE_BUTTON_KEY, create_window
 from pyclashbot.utils.caching import (
     cache_user_settings,
     check_user_settings,
@@ -23,7 +27,7 @@ def read_window(
     """Method for reading the attributes of the window
     args:
         window: the window to read
-        timeout: the timeout for the read method
+        timeout: the timeout for the  read method
 
     returns:
         tuple of the event and the values of the window
@@ -39,6 +43,14 @@ def read_window(
 
 
 def make_job_dictionary(values: dict[str, str | int]) -> dict[str, str | int]:
+    """Create a dictionary of job toggles and increments based on the values of the GUI window.
+
+    Args:
+        values: A dictionary of the values of the GUI window.
+
+    Returns:
+        A dictionary of job toggles and increments based on the values of the GUI window.
+    """
     jobs_dictionary: dict[str, str | int] = {
         # job toggles
         "open_chests_user_toggle": values["open_chests_user_toggle"],
@@ -50,6 +62,11 @@ def make_job_dictionary(values: dict[str, str | int]) -> dict[str, str | int]:
         "upgrade_user_toggle": values["card_upgrade_user_toggle"],
         "war_user_toggle": values["war_user_toggle"],
         "random_decks_user_toggle": values["random_decks_user_toggle"],
+        "open_bannerbox_user_toggle": values["open_bannerbox_user_toggle"],
+        "random_plays_user_toggle": values["random_plays_user_toggle"],
+        "skip_fight_if_full_chests_user_toggle": values[
+            "skip_fight_if_full_chests_user_toggle"
+        ],
         # job increments
         "card_upgrade_increment_user_input": values[
             "card_upgrade_increment_user_input"
@@ -65,11 +82,23 @@ def make_job_dictionary(values: dict[str, str | int]) -> dict[str, str | int]:
         "deck_randomization_increment_user_input": values[
             "deck_randomization_increment_user_input"
         ],
+        "war_attack_increment_user_input": values["war_attack_increment_user_input"],
     }
+
     return jobs_dictionary
 
 
 def check_for_invalid_job_increment_input(job_dictionary):
+    """
+    Check if the job increments in the job dictionary are valid.
+
+    Args:
+        job_dictionary: A dictionary containing job information.
+
+    Returns:
+        False if all job increments are valid, otherwise
+        returns the key of the invalid job increment.
+    """
     items = job_dictionary.items()
 
     for key, value in items:
@@ -93,6 +122,15 @@ def check_for_invalid_job_increment_input(job_dictionary):
 
 
 def check_for_no_jobs_in_job_dictionary(job_dict):
+    """
+    Check if there are no jobs in the job dictionary.
+
+    Args:
+        job_dict: A dictionary containing job information.
+
+    Returns:
+        True if there are no jobs in the dictionary, False otherwise.
+    """
     for i in job_dict.items():
         if i[1]:
             return False
@@ -133,6 +171,17 @@ def load_last_settings(window) -> None:
 
 
 def show_invalid_job_increment_input_popup(key) -> None:
+    """
+    Display a popup message indicating that the job increment input is invalid.
+
+    Args:
+        key: A string representing the key of the job increment input.
+
+    Returns:
+        None
+    """
+
+    # A dictionary mapping the job increment input keys to their corresponding job names.
     key_to_job_dict: dict[str, str] = {
         "card_upgrade_increment_user_input": "Card Upgrade Increment",
         "free_offer_collection_increment_user_input": "Free Offer Collection Increment",
@@ -140,9 +189,13 @@ def show_invalid_job_increment_input_popup(key) -> None:
         "card_mastery_collect_increment_user_input": "Card Mastery Collect Increment",
         "open_chests_increment_user_input": "Open Chests Increment",
         "deck_randomization_increment_user_input": "Randomize Deck Increment",
+        "war_attack_increment_user_input": "War Attack Increment",
     }
 
+    # Get the job name corresponding to the given key.
     key_string = key_to_job_dict[key]
+
+    # Display a popup message indicating that the job increment input is invalid.
     sg.popup(
         f"Invalid job increment input for key: {key_string}",
         title="Invalid Job Increment Input",
@@ -251,7 +304,15 @@ def update_layout(window: sg.Window, logger: Logger) -> None:
 
 
 def exit_button_event(thread) -> None:
-    # shut down the thread if it is still running
+    """
+    Method for handling the exit button event. Shuts down the thread if it is still running.
+
+    Args:
+        thread: The thread to be shut down.
+
+    Returns:
+        None
+    """
     if thread is not None:
         thread.shutdown(kill=True)
 
@@ -316,12 +377,26 @@ def main_gui() -> None:
         # on Donate button event, open the donation link in browser
         elif event == "bug-report":
             webbrowser.open(
-                "https://github.com/matthewmiglio/py-clash-bot/issues/new/choose"
+                "https://github.com/pyclashbot/py-clash-bot/issues/new/choose"
             )
 
+        elif event == "upload-log":
+            if logger is not None:
+                url = logger.upload_log()
+                if url is not None:
+                    webbrowser.open(url)
+
         # donate event
-        elif event == "donate":
-            webbrowser.open("https://github.com/sponsors/matthewmiglio?o=sd&sc=t")
+        elif event in ("donate", DONATE_BUTTON_KEY):
+            urls = {
+                "https://github.com/sponsors/matthewmiglio?o=sd&sc=t",
+                "https://www.paypal.com/donate/"
+                "?business=YE72ZEB3KWGVY"
+                "&no_recurring=0"
+                "&item_name=Support+my+projects%21"
+                "&currency_code=USD",
+            }
+            webbrowser.open(random.choice(list(urls)))
 
         # on Help button event, open the help gui
         elif event == "discord":
@@ -338,50 +413,5 @@ def main_gui() -> None:
         thread.join()
 
 
-def dummy_bot():
-    vm_index = 1
-    logger = Logger()
-    state = "open_chests"
-    jobs_dictionary = {
-        # job list
-        "open_chests_user_toggle": True,
-        "request_user_toggle": True,
-        "card_mastery_user_toggle": True,
-        "free_offer_user_toggle": True,
-        "1v1_battle_user_toggle": True,
-        "2v2_battle_user_toggle": True,
-        "upgrade_user_toggle": True,
-        "war_user_toggle": True,
-        "random_decks_user_toggle": True,
-        # job incremenets
-        "card_upgrade_increment_user_input": "1",
-        "free_offer_collection_increment_user_input": "1",
-        "request_increment_user_input": "1",
-        "card_mastery_collect_increment_user_input": "1",
-        "deck_randomization_increment_user_input": "1",
-        "open_chests_increment_user_input": "1",
-    }
-
-    while 1:
-        # code to run
-        state = state_tree(
-            vm_index,
-            logger,
-            state,
-            jobs_dictionary,
-        )
-
-        if state == "restart":
-            for _ in range(10):
-                print("Failure")
-            break
-
-
-def debug() -> None:
-    pass
-
-
 if __name__ == "__main__":
-    # debug()
-    # dummy_bot()
     main_gui()

@@ -3,15 +3,15 @@ This module contains functions for launching and controlling MEmu virtual machin
 as well as starting and stopping the Clash Royale app within them.
 """
 
+
+import contextlib
 import subprocess
 import sys
 import time
-from os import makedirs
-from os.path import exists, expandvars, join
+from os.path import join
 
 import numpy
 import psutil
-import pygetwindow as gw
 import PySimpleGUI as sg
 from pymemuc import PyMemuc, PyMemucError, VMInfo
 
@@ -32,40 +32,30 @@ MANUAL_CLASH_MAIN_WAIT_TIME = 10
 
 
 def restart_emulator(logger, start_time=time.time()):
-    # restart the game, including the launcher and emulator
-
     # stop all vms
-    logger.change_status(status="Closing everything Memu related. . .")
     close_everything_memu()
 
     # check for the pyclashbot vm, if not found then create it
     vm_index = check_for_vm(logger)
     print(f"Found vm of index {vm_index}")
-    configure_vm(logger, vm_index=vm_index)
+    configure_vm(vm_index=vm_index)
 
     # start the vm
-    # logger.change_status(status="Starting a new Memu Client using the launcher. . .")
-    # start_emulator_without_pmc(logger) # this is the old way
-    logger.change_status(status="Opening the Memu emulator...")
+    logger.change_status(status="Opening the pyclashbot emulator...")
     pmc.start_vm(vm_index=vm_index)
 
     # wait for the window to appear
-    wait_start_time = time.time()
-    time_waiting = 0
-    while time_waiting < MANUAL_VM_WAIT_TIME:
-        time.sleep(4)
-        time_waiting = time.time() - wait_start_time
-        logger.log(
-            (f"Waiting for VM to load {str(time_waiting)[:4]}/{MANUAL_VM_WAIT_TIME}")
-        )
+    for i in range(MANUAL_VM_WAIT_TIME):
+        logger.change_status(status=f"Waiting {MANUAL_VM_WAIT_TIME-i}s...")
+        time.sleep(1)
 
     # skip ads
-    logger.log("Skipping ads")
     if skip_ads(vm_index) == "fail":
         logger.log("Error 99 Failed to skip ads")
         return restart_emulator(logger, start_time)
 
     # start clash royale
+    logger.change_status("Starting clash royale")
     start_clash_royale(logger, vm_index)
 
     # manually wait for clash main
@@ -74,8 +64,8 @@ def restart_emulator(logger, start_time=time.time()):
     while time_waiting < MANUAL_CLASH_MAIN_WAIT_TIME:
         time.sleep(4)
         time_waiting = time.time() - wait_start_time
-        logger.log(
-            f"Manually waiting for clash main page. {str(time_waiting)[:3]}/{MANUAL_CLASH_MAIN_WAIT_TIME}"
+        logger.change_status(
+            f"Manually waiting for clash main page. {str(time_waiting)[:3]}"
         )
 
     # check-wait for clash main if need to wait longer
@@ -92,7 +82,6 @@ def restart_emulator(logger, start_time=time.time()):
 def skip_ads(vm_index):
     # Method for skipping the memu ads that popip up when you start memu
 
-    # print("Trying to skipping ads")
     try:
         for _ in range(4):
             pmc.trigger_keystroke_vm("home", vm_index=vm_index)
@@ -113,11 +102,28 @@ def check_for_vm(logger: Logger) -> int:
     Returns:
         int: index of the vm
     """
+    start_time = time.time()
 
     vm_index = get_vm_index(logger, EMULATOR_NAME)
 
-    # return the index. if no vms named pyclashbot exist, create one.
-    return vm_index if vm_index != -1 else create_vm(logger)
+    if vm_index != -1:
+        logger.change_status(f'Found a vm named "pyclashbot" (#{vm_index})')
+        return vm_index
+
+    logger.change_status("Didn't find a vm named 'pyclashbot', creating one...")
+
+    new_vm_index = create_vm()
+    logger.change_status(f"New VM index is {new_vm_index}")
+
+    logger.change_status("Configuring emualtor")
+    configure_vm(vm_index=new_vm_index)
+
+    logger.change_status("Setting language")
+    rename_vm(vm_index=new_vm_index, name=EMULATOR_NAME)
+
+    logger.change_status(f"Created and configured new pyclashbot emulator in {str(time.time() - start_time)[:5]}s")
+
+    return create_vm()
 
 
 def start_clash_royale(logger: Logger, vm_index):
@@ -142,37 +148,19 @@ def start_clash_royale(logger: Logger, vm_index):
 
 
 # making/configuring emulator methods
-def create_vm(logger: Logger):
-    # create a vm named pyclashbot
-    logger.change_status(status="Creating VM...")
-    memuc_pid = start_memuc_console()
+def create_vm():
+    """Create a vm with the given name and version"""
+    start_memuc_console()
 
-    vm_index = pmc.create_vm(vm_version=ANDROID_VERSION)
-    while vm_index == -1:  # handle when vm creation fails
-        vm_index = pmc.create_vm(vm_version=ANDROID_VERSION)
-        time.sleep(1)
-    time.sleep(5)
-    configure_vm(logger, vm_index)
-    # rename the vm to pyclashbot
-    rename_vm(logger, vm_index, EMULATOR_NAME)
-    stop_memuc_console(memuc_pid)
-    logger.change_status(status=f"Created VM: {vm_index} - {EMULATOR_NAME}")
+    vm_index = pmc.create_vm(vm_version="96")
     return vm_index
 
-
 def rename_vm(
-    logger: Logger,
     vm_index: int,
     name: str,
 ):
     """rename the vm to name"""
-    count = 0
-    while get_vm_index(logger, name) != vm_index:
-        logger.change_status(
-            status=f"Renaming VM {vm_index} to {name} {f'(attempt {count})' if count > 0 else ''}"
-        )
-        pmc.rename_vm(vm_index=vm_index, new_name=name)
-        count += 1
+    pmc.rename_vm(vm_index=vm_index, new_name=name)
 
 
 def set_vm_language(vm_index: int):
@@ -187,23 +175,10 @@ def set_vm_language(vm_index: int):
 
     for command in set_language_commands:
         pmc.send_adb_command_vm(vm_index=vm_index, command=command)
-        time.sleep(0.1)
+        time.sleep(0.33)
 
 
-def get_screenshot_folder() -> str:
-    """Get the path to the screenshot folder"""
-    screenshot_path = join(expandvars("%appdata%"), "py-clash-bot", "screenshots")
-    # make sure this folder exists
-    if not exists(screenshot_path):
-        makedirs(screenshot_path)
-    return screenshot_path
-
-
-def configure_vm(logger: Logger, vm_index):
-    logger.change_status(status="Configuring VM")
-
-    memuc_pid = start_memuc_console()
-
+def configure_vm(vm_index):
     cpu_count: int = psutil.cpu_count(logical=False)
     cpu_count: int = numpy.clip(cpu_count // 2, 2, 6)
     total_mem = psutil.virtual_memory()[0] // 1024 // 1024
@@ -224,17 +199,14 @@ def configure_vm(logger: Logger, vm_index):
         "turbo_mode": "0",
         "enable_audio": "0",
         "is_hide_toolbar": "1",
-        "picturepath": get_screenshot_folder(),
     }
 
     for key, value in configuration.items():
         pmc.set_configuration_vm(key, value, vm_index=vm_index)
 
-    time.sleep(3)
     set_vm_language(vm_index=vm_index)
-    time.sleep(10)
-
-    stop_memuc_console(memuc_pid)
+    set_vm_language(vm_index=vm_index)
+    set_vm_language(vm_index=vm_index)
 
 
 # emulator interaction methods
@@ -306,34 +278,6 @@ def check_if_clash_banned(vm_index):
     )
 
 
-def check_if_on_clash_main_menu(vm_index):
-    """
-    Checks if the user is on the clash main menu.
-    Returns True if on main menu, False if not.
-    """
-    iar = numpy.asarray(screenshot(vm_index))
-
-    gem_icon_exists = False
-    for x_val in range(395, 412):
-        this_pixel = iar[17][x_val]
-        if pixel_is_equal([65, 198, 24], this_pixel, tol=35):
-            gem_icon_exists = True
-
-    friends_icon_exists = False
-    for x_val in range(255, 280):
-        this_pixel = iar[72][x_val]
-        if pixel_is_equal([244, 244, 255], this_pixel, tol=35):
-            friends_icon_exists = True
-
-    gold_icon_exists = False
-    for x_val in range(290, 310):
-        this_pixel = iar[13][x_val]
-        if pixel_is_equal([223, 175, 56], this_pixel, tol=35):
-            gold_icon_exists = True
-
-    return bool(gem_icon_exists and friends_icon_exists and gold_icon_exists)
-
-
 # starting/closing memu vms/apps
 
 
@@ -357,29 +301,23 @@ def restart_vm(logger, vm_index):
     launch_vm(logger, vm_index)
 
 
-# Method to print all window names
-def check_for_memuc_console_window():
-    all_windows = gw.getAllTitles()
-    for window_name in all_windows:
-        if "Multiple Instance Manager" in window_name:
-            return True
-    return False
-
-
 def start_memuc_console() -> int:
     """Start the memuc console and return the process ID"""
-    loops = 0
-    while not check_for_memuc_console_window():
-        # pylint: disable=protected-access
-        console_path = join(pmc._get_memu_top_level(), "MEMuConsole.exe")
-        # pylint: disable=consider-using-with
-        process = subprocess.Popen(
-            console_path, creationflags=subprocess.DETACHED_PROCESS
-        )
-        loops += 1
+    # check if memu console is already running
+    for process in psutil.process_iter():
+        with contextlib.suppress(psutil.NoSuchProcess, psutil.AccessDenied):
+            if process.name() == "MEMuConsole.exe":
+                return process.pid
 
-    # print(f"Started memu console with PID {process.pid} in {loops} loops")
-    return process.pid
+    # start memu console
+    # pylint: disable=protected-access
+    console_path = join(pmc._get_memu_top_level(), "MEMuConsole.exe")
+    # pylint: disable=consider-using-with
+    process = subprocess.Popen(console_path, creationflags=subprocess.DETACHED_PROCESS)
+
+    # ensure the process actually started
+    time.sleep(2)
+    return process.pid if psutil.pid_exists(process.pid) else start_memuc_console()
 
 
 def stop_memuc_console(process_id: int) -> None:
@@ -442,3 +380,7 @@ and login before using this bot."""
             break
     _window.close()
     sys.exit(0)
+
+
+if __name__ == '__main__':
+    configure_vm(4)

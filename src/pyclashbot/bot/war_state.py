@@ -65,10 +65,21 @@ def find_war_battle_icon(vm_index):
 def war_state(vm_index: int, logger: Logger, next_state: str):
     """method to handle the war state of the bot"""
 
+    logger.add_war_attempt()
+
     logger.change_status(status="War state")
 
     # if not on clash main: return
-    if  check_if_on_clash_main_menu(vm_index) is not True:
+    clash_main_check = check_if_on_clash_main_menu(vm_index)
+    if clash_main_check is not True:
+        logger.change_status("Error 4848 Not on calshmain for start of war_state()")
+        logger.log(f'There are the pixels the bot saw after failing to find clash main:')
+        for pixel in clash_main_check:
+            logger.log(f'   {pixel}')
+
+        return "restart"
+
+    if check_if_on_clash_main_menu(vm_index) is not True:
         logger.change_status(
             status="Error 4069852734098 Not on clash main to begin war state"
         )
@@ -404,5 +415,4 @@ def war_state_check_pixels_for_clan_flag(vm_index):
 
 
 if __name__ == "__main__":
-    while 1:
-        print(find_war_battle_icon(1))
+    pass

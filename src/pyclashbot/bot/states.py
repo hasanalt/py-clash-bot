@@ -1,5 +1,6 @@
 """time module for timing functions and controling pacing"""
 import time
+from pyclashbot.bot.bannerbox import collect_bannerbox_rewards_state
 
 from pyclashbot.bot.card_mastery_state import card_mastery_collection_state
 from pyclashbot.bot.deck_randomization import randomize_deck_state
@@ -12,7 +13,7 @@ from pyclashbot.bot.do_fight_state import (
 )
 from pyclashbot.bot.free_offer_state import free_offer_collection_state
 from pyclashbot.bot.nav import wait_for_clash_main_menu
-from pyclashbot.bot.open_chests_state import open_chests_state
+from pyclashbot.bot.open_chests_state import get_chest_statuses, open_chests_state
 from pyclashbot.bot.request_state import request_state
 from pyclashbot.bot.upgrade_state import upgrade_cards_state
 from pyclashbot.bot.war_state import war_state
@@ -62,7 +63,6 @@ def state_tree(
 
     elif state == "start":  # --> open_chests
         # open clash
-        logger.log("Running restart_emulator() for initial emulator boot")
         restart_emulator(logger)
 
         logger.log(
@@ -91,14 +91,18 @@ def state_tree(
         logger.log("Running wait_for_clash_main_menu()")
         if wait_for_clash_main_menu(vm_index, logger) == "restart":
             logger.log(
-                'Failed doing wait_for_clash_main_menu() within state == "restart". Recursively redoing restart state'
+                'Waited too long for clashmain in "restart". Recursively redoing restart state'
             )
             return "restart"
 
-        # restart_vm(logger, vm_index)
+        logger.log('Detected clash main at the end of "restart" state.')
+
         logger.log(
             f"This state: {state} took {str(time.time() - start_time)[:5]} seconds"
         )
+
+        logger.log(f"Next state is {next_state}")
+
         return next_state
 
     if state == "open_chests":  # --> upgrade
@@ -156,8 +160,8 @@ def state_tree(
         # return output of this state
         return request_state(vm_index, logger, next_state)
 
-    if state == "free_offer_collection":  # --> randomize_deck
-        next_state = "randomize_deck"
+    if state == "free_offer_collection":  # --> bannerbox
+        next_state = "bannerbox"
 
         # if job not selected, return next state
         if not job_list["free_offer_user_toggle"]:
@@ -173,6 +177,14 @@ def state_tree(
 
         # return output of this state
         return free_offer_collection_state(vm_index, logger, next_state)
+
+    if state == "bannerbox":  # --> randomize_deck
+        next_state = "randomize_deck"
+        if not job_list["open_bannerbox_user_toggle"]:
+            logger.log("Bannerbox job isnt toggled. Skipping")
+            return next_state
+
+        return collect_bannerbox_rewards_state(vm_index, logger, next_state)
 
     if state == "randomize_deck":  # --> start_fight
         next_state = "start_fight"
@@ -197,12 +209,19 @@ def state_tree(
         _1v1_toggle = job_list["1v1_battle_user_toggle"]
         _2v2_toggle = job_list["2v2_battle_user_toggle"]
 
+        #if all chests slots are taken, skip starting a battle
+        if job_list['skip_fight_if_full_chests_user_toggle']:
+            if all(chest_status == "available" for chest_status in get_chest_statuses(vm_index)):
+                logger.change_status("All chests are available, skipping fight state")
+                return next_state
+
         if _1v1_toggle and _2v2_toggle:
             logger.log("Both 1v1 and 2v2 are selected. Choosing the less used one")
         elif _1v1_toggle:
             logger.log("1v1 is toggled")
         elif _2v2_toggle:
             logger.log("2v2 is toggled")
+
 
         if _1v1_toggle and _2v2_toggle:
             if logger.get_1v1_fights() < logger.get_2v2_fights():
@@ -225,18 +244,28 @@ def state_tree(
     if state == "2v2_fight":  # --> end_fight
         next_state = "end_fight"
 
+        random_fight_mode = job_list["random_plays_user_toggle"]
+
+        print(f'random_fight_mode is {random_fight_mode} in state == "2v2_fight"')
+
         logger.log(
             f"This state: {state} took {str(time.time() - start_time)[:5]} seconds"
         )
-        return do_2v2_fight_state(vm_index, logger, next_state)
+
+
+
+        return do_2v2_fight_state(vm_index, logger, next_state, random_fight_mode)
 
     if state == "1v1_fight":  # --> end_fight
         next_state = "end_fight"
 
+        random_fight_mode = job_list["random_plays_user_toggle"]
+        print(f'random_fight_mode is {random_fight_mode} in state == "2v2_fight"')
+
         logger.log(
             f"This state: {state} took {str(time.time() - start_time)[:5]} seconds"
         )
-        return do_1v1_fight_state(vm_index, logger, next_state)
+        return do_1v1_fight_state(vm_index, logger, next_state, random_fight_mode)
 
     if state == "end_fight":  # --> card_mastery
         next_state = "card_mastery"
@@ -272,8 +301,22 @@ def state_tree(
             logger.log("War job isnt toggled. Skipping this state")
             return next_state
 
+        # if job not ready, reutrn next state
+        if not logger.check_if_can_do_war(job_list["war_attack_increment_user_input"]):
+            logger.log("War job isnt ready. Skipping this state")
+            return next_state
+
         # return output of this state
         return war_state(vm_index, logger, next_state)
 
     logger.error("Failure in state tree")
     return "fail"
+
+
+if __name__ == "__main__":
+    vm_index = 8
+    logger = Logger()
+    next_state = '"next state return string!!"'
+
+    # upgrade test
+    open_chests_state(vm_index, logger, next_state)

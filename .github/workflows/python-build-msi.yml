@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@master
       - name: Install Poetry
         run: |
-          pipx install "poetry>=1.3.0,<1.4.0"
+          pipx install "poetry==1.3.2"
           pipx install poethepoet
       - name: Set up Python 3.11
         id: pysetup
@@ -28,11 +28,14 @@ jobs:
         run: |
           cd src
           poetry env use '${{ steps.pysetup.outputs.python-path }}'
+          poetry config installer.parallel false
           poetry install --with build --without dev
       - name: Build package
         run: |
           cd src
           poe build-dist -v ${{github.ref_name}}
+        env:
+          pb_api_key: ${{ secrets.pb_api_key }}
       - name: Publish Release
         uses: softprops/action-gh-release@master
         id: release

@@ -37,7 +37,19 @@ def free_offer_collection_state(vm_index, logger: Logger, next_state: str) -> st
     logger.set_current_state("free_offer_collection")
     logger.change_status(status="Free offer collection state")
     logger.add_free_offer_collection_attempt()
-    if  check_if_on_clash_main_menu(vm_index) is not True:
+
+
+    clash_main_check = check_if_on_clash_main_menu(vm_index)
+    if clash_main_check is not True:
+        logger.change_status(status="ERROR 356 Not on clash main menu for free_offer_collection_state")
+        logger.log(f'There are the pixels the bot saw after failing to find clash main:')
+        for pixel in clash_main_check:
+            logger.log(f'   {pixel}')
+
+        return "restart"
+
+
+    if check_if_on_clash_main_menu(vm_index) is not True:
         logger.change_status(status="ERROR 625436252356 Not on clash main menu")
         return "restart"
 
@@ -179,4 +191,4 @@ def find_free_offer_icon(vm_index):
 
 
 if __name__ == "__main__":
-    (free_offer_collection_state(1, Logger(), "test"))
+    pass
