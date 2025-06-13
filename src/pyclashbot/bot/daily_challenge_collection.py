@@ -147,18 +147,18 @@ def collect_all_daily_rewards(vm_index, logger) -> bool:
         logger.change_status(
             "Not on clash main at start of collect_daily_rewards(). Returning False",
         )
-        return True
+        return False
 
     if not check_if_daily_rewards_button_exists(vm_index):
         logger.change_status(
             "Daily rewards button doesn't exist. Assuming rewards already collected or not available.",
         )
-        return False
+        return True
 
     rewards = check_which_rewards_are_available(vm_index, logger)
     if rewards is False:
         logger.change_status("Error checking which rewards are available")
-        return True
+        return False
 
     if not any(rewards):
         logger.change_status("No daily rewards available to collect")
