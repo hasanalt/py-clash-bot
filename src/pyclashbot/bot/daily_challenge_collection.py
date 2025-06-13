@@ -8,7 +8,7 @@ from pyclashbot.utils.logger import Logger
 from pyclashbot.memu.client import click, screenshot
 
 CLASH_MAIN_DEADSPACE_COORD = (240, 600)
-CLASH_MAIN_DEADSPACE_COLOR = [255, 175, 78]  # BGR
+CLASH_MAIN_DEADSPACE_COLOR = [255, 175, 78]
 
 
 
