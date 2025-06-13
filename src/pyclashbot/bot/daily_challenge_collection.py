@@ -147,7 +147,7 @@ def collect_all_daily_rewards(vm_index, logger) -> bool:
         logger.change_status(
             "Not on clash main at start of collect_daily_rewards(). Returning False",
         )
-        return False
+        return True
 
     if not check_if_daily_rewards_button_exists(vm_index):
         logger.change_status(
